@@ -1,24 +1,282 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Play, Search, X } from "lucide-react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+import heroImg from "@/assets/hero.jpg";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { initDemo, listGames } from "@/lib/slotegrator.functions";
+import type { SlotegratorGame } from "@/lib/slotegrator-shared";
+
+const gamesQuery = (page: number) =>
+  queryOptions({
+    queryKey: ["games", page],
+    queryFn: () => listGames({ data: { page } }),
+    staleTime: 5 * 60_000,
+  });
+
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "গোল্ডেন রিলস — ফ্রি ডেমো স্লট গেম" },
+      { name: "description", content: "শত শত ক্যাসিনো গেম ফ্রি ডেমো মোডে খেলুন। কোনো টাকা লাগবে না।" },
+      { property: "og:title", content: "গোল্ডেন রিলস — ফ্রি ডেমো স্লট গেম" },
+      { property: "og:description", content: "শত শত ক্যাসিনো গেম ফ্রি ডেমো মোডে খেলুন। কোনো টাকা লাগবে না।" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [provider, setProvider] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<{ name: string; url: string } | null>(null);
+  const [launching, setLaunching] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const startDemo = useServerFn(initDemo);
+
+  const { data, isLoading } = useQuery(gamesQuery(page));
+  const games = data?.games ?? [];
+
+  const providers = useMemo(
+    () => Array.from(new Set(games.map((g) => g.provider).filter(Boolean) as string[])).sort(),
+    [games],
+  );
+  const filtered = games.filter(
+    (g) =>
+      (!provider || g.provider === provider) &&
+      g.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  async function play(game: SlotegratorGame) {
+    setLaunching(game.uuid);
+    setLaunchError(null);
+    try {
+      const res = await startDemo({
+        data: {
+          gameUuid: game.uuid,
+          returnUrl: window.location.href,
+          mobile: window.innerWidth < 768,
+        },
+      });
+      if (res.ok && res.url) setPlaying({ name: game.name, url: res.url });
+      else setLaunchError("এই গেমটির ডেমো এখন চালু করা যাচ্ছে না।");
+    } catch {
+      setLaunchError("এই গেমটির ডেমো এখন চালু করা যাচ্ছে না।");
+    } finally {
+      setLaunching(null);
+    }
+  }
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
+    <div className="min-h-screen">
+      <header className="relative overflow-hidden border-b">
+        <img
+          src={heroImg}
+          alt="সোনালি স্লট মেশিন ও কয়েন"
+          width={1920}
+          height={800}
+          className="absolute inset-0 h-full w-full object-cover object-right"
+        />
+        <div className="absolute inset-0 bg-hero-fade" />
+        <div className="relative mx-auto max-w-7xl px-6 py-20 md:py-28">
+          <p className="mb-3 text-sm font-medium uppercase tracking-[0.3em] text-emerald">
+            শুধু ডেমো · কোনো টাকা লাগবে না
+          </p>
+          <h1 className="font-display text-5xl font-extrabold leading-tight md:text-7xl">
+            <span className="text-gold">Golden Reels</span>
+          </h1>
+          <p className="mt-4 max-w-md text-lg text-muted-foreground">
+            সেরা প্রোভাইডারদের শত শত গেম — এক ক্লিকে ফ্রি খেলুন।
+          </p>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-10">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="font-display text-2xl font-semibold">
+            গেম লবি
+            {data?.ok && data.total > 0 && (
+              <span className="ml-3 align-middle text-sm font-normal text-muted-foreground">
+                মোট {data.total.toLocaleString("bn-BD")}টি
+              </span>
+            )}
+          </h2>
+          <div className="relative md:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="গেম খুঁজুন…"
+              className="bg-card pl-9"
+            />
+          </div>
+        </div>
+
+        {providers.length > 1 && (
+          <div className="mb-8 flex flex-wrap gap-2">
+            <Chip active={!provider} onClick={() => setProvider(null)}>
+              সব
+            </Chip>
+            {providers.map((p) => (
+              <Chip key={p} active={provider === p} onClick={() => setProvider(p)}>
+                {p}
+              </Chip>
+            ))}
+          </div>
+        )}
+
+        {launchError && (
+          <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+            {launchError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <Grid>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-card" />
+            ))}
+          </Grid>
+        ) : !data?.ok ? (
+          <div className="rounded-2xl border bg-card px-6 py-16 text-center">
+            <p className="font-display text-xl text-gold">গেমগুলো আনা যাচ্ছে না</p>
+            <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+              Slotegrator এই মুহূর্তে সংযোগ গ্রহণ করছে না। সাধারণত তারা শুধু অনুমোদিত সার্ভার
+              থেকে আসা অনুরোধ মেনে নেয় — তাদের সাপোর্টের সাথে কথা বলে অনুমতি নিতে হবে।
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <p className="py-16 text-center text-muted-foreground">কোনো গেম পাওয়া যায়নি।</p>
+        ) : (
+          <Grid>
+            {filtered.map((g) => (
+              <GameCard
+                key={g.uuid}
+                game={g}
+                loading={launching === g.uuid}
+                onPlay={() => play(g)}
+              />
+            ))}
+          </Grid>
+        )}
+
+        {data?.ok && data.pageCount > 1 && (
+          <div className="mt-10 flex items-center justify-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              aria-label="আগের পাতা"
+            >
+              <ChevronLeft />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              পাতা {page.toLocaleString("bn-BD")} / {data.pageCount.toLocaleString("bn-BD")}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page >= data.pageCount}
+              onClick={() => setPage((p) => p + 1)}
+              aria-label="পরের পাতা"
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        )}
+      </main>
+
+      {playing && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-overlay backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b bg-card px-4 py-3">
+            <p className="font-display font-semibold text-gold">{playing.name}</p>
+            <Button variant="ghost" size="icon" onClick={() => setPlaying(null)} aria-label="বন্ধ করুন">
+              <X />
+            </Button>
+          </div>
+          <iframe
+            src={playing.url}
+            title={playing.name}
+            className="h-full w-full flex-1 border-0"
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Grid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      {children}
+    </div>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        active
+          ? "rounded-full bg-gold px-4 py-1.5 text-sm font-semibold text-primary-foreground"
+          : "rounded-full border bg-card px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      }
     >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+      {children}
+    </button>
+  );
+}
+
+function GameCard({
+  game,
+  loading,
+  onPlay,
+}: {
+  game: SlotegratorGame;
+  loading: boolean;
+  onPlay: () => void;
+}) {
+  return (
+    <div className="group relative aspect-[3/4] overflow-hidden rounded-xl border bg-card transition-all hover:-translate-y-1 hover:border-primary/60 hover:shadow-gold">
+      {game.image ? (
+        <img
+          src={game.image}
+          alt={game.name}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center p-4 text-center font-display text-gold">
+          {game.name}
+        </div>
+      )}
+      <div className="absolute inset-0 bg-card-fade" />
+      <div className="absolute inset-x-0 bottom-0 p-3">
+        <p className="truncate text-sm font-semibold">{game.name}</p>
+        {game.provider && <p className="truncate text-xs text-muted-foreground">{game.provider}</p>}
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center bg-overlay opacity-0 transition-opacity group-hover:opacity-100">
+        <Button variant="gold" onClick={onPlay} disabled={loading}>
+          {loading ? <Loader2 className="animate-spin" /> : <Play />}
+          ডেমো খেলুন
+        </Button>
+      </div>
     </div>
   );
 }
