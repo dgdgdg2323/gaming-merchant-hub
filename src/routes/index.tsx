@@ -83,7 +83,7 @@ function Index() {
         />
         <div className="absolute inset-0 bg-hero-fade" />
         <div className="relative mx-auto max-w-7xl px-6 py-20 md:py-28">
-          <p className="mb-3 text-sm font-medium uppercase tracking-[0.3em] text-emerald">
+          <p className="mb-3 text-base font-semibold text-emerald">
             শুধু ডেমো · কোনো টাকা লাগবে না
           </p>
           <h1 className="font-display text-5xl font-extrabold leading-tight md:text-7xl">
