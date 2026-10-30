@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useSession() {
+const AuthContext = createContext<{ session: Session | null; ready: boolean }>({
+  session: null,
+  ready: false,
+});
+
+/** Single auth listener for the whole app (mounted once in the root route). */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -11,11 +18,19 @@ export function useSession() {
       setSession(data.session);
       setReady(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        if (event === "SIGNED_OUT") queryClient.removeQueries({ queryKey: ["player"] });
+        else queryClient.invalidateQueries({ queryKey: ["player"] });
+      }
+    });
     return () => data.subscription.unsubscribe();
-  }, []);
-  return { session, ready };
+  }, [queryClient]);
+  return <AuthContext.Provider value={{ session, ready }}>{children}</AuthContext.Provider>;
 }
+
+export const useSession = () => useContext(AuthContext);
 
 export function usePlayer(userId: string | undefined) {
   return useQuery({
