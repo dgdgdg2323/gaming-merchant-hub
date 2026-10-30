@@ -1,110 +1,146 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { buildSignString, type SlotegratorGame } from "./slotegrator-shared";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SlotegratorGame } from "./slotegrator-shared";
+import { safeEqual } from "./slotegrator-shared";
+import { slotegratorConfig, slotegratorRequest, walletDb, walletSecret } from "./slotegrator-core";
 
-async function hmacSha1Hex(key: string, message: string) {
-  const enc = new TextEncoder();
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(key),
-    { name: "HMAC", hash: "SHA-1" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+export const getPublicConfig = createServerFn({ method: "GET" }).handler(async () => {
+  return { currency: process.env["SLOTEGRATOR_CURRENCY"] || "USD" };
+});
 
 export const listGames = createServerFn({ method: "GET" })
   .inputValidator((input: { page: number }) =>
     z.object({ page: z.number().int().min(1).max(10000) }).parse(input),
   )
   .handler(async ({ data }) => {
-    const merchantId = process.env["SLOTEGRATOR_MERCHANT_ID"];
-    const merchantKey = process.env["SLOTEGRATOR_MERCHANT_KEY"];
-    const apiUrl = process.env["SLOTEGRATOR_API_URL"];
-    if (!merchantId || !merchantKey || !apiUrl) {
+    if (!slotegratorConfig()) {
       return { ok: false as const, error: "config", games: [], pageCount: 0, total: 0 };
     }
-    const params = { page: String(data.page) };
-    const headers: Record<string, string> = {
-      "X-Merchant-Id": merchantId,
-      "X-Timestamp": String(Math.floor(Date.now() / 1000)),
-      "X-Nonce": crypto.randomUUID().replace(/-/g, ""),
-    };
-    headers["X-Sign"] = await hmacSha1Hex(merchantKey, buildSignString({ ...params, ...headers }));
-    try {
-      const res = await fetch(`${apiUrl}/games?${new URLSearchParams(params)}`, {
-        headers: { ...headers, Accept: "application/json" },
-      });
-      if (!res.ok) {
-        console.error("Slotegrator /games failed", res.status);
-        return { ok: false as const, error: `http_${res.status}`, games: [], pageCount: 0, total: 0 };
-      }
-      const body = (await res.json()) as {
-        items?: SlotegratorGame[];
-        _meta?: { pageCount?: number; totalCount?: number };
-      };
-      return {
-        ok: true as const,
-        error: null,
-        games: body.items ?? [],
-        pageCount: body._meta?.pageCount ?? Number(res.headers.get("X-Pagination-Page-Count") ?? 1),
-        total: body._meta?.totalCount ?? Number(res.headers.get("X-Pagination-Total-Count") ?? 0),
-      };
-    } catch (e) {
-      console.error("Slotegrator /games error", e);
-      return { ok: false as const, error: "network", games: [], pageCount: 0, total: 0 };
+    const res = await slotegratorRequest("GET", "/games", { page: String(data.page) });
+    if (!res.ok) {
+      console.error("Slotegrator /games failed", res.status, res.body);
+      return { ok: false as const, error: `http_${res.status}`, games: [], pageCount: 0, total: 0 };
     }
+    const body = res.body as {
+      items?: SlotegratorGame[];
+      _meta?: { pageCount?: number; totalCount?: number };
+    };
+    return {
+      ok: true as const,
+      error: null,
+      games: body.items ?? [],
+      pageCount: body._meta?.pageCount ?? Number(res.headers?.get("X-Pagination-Page-Count") ?? 1),
+      total: body._meta?.totalCount ?? Number(res.headers?.get("X-Pagination-Total-Count") ?? 0),
+    };
   });
 
+const launchSchema = z.object({
+  gameUuid: z.string().min(1).max(100),
+  returnUrl: z.string().url().max(500),
+  mobile: z.boolean(),
+});
+
 export const initDemo = createServerFn({ method: "POST" })
-  .inputValidator((input: { gameUuid: string; returnUrl: string; mobile: boolean }) =>
-    z
-      .object({
-        gameUuid: z.string().min(1).max(100),
-        returnUrl: z.string().url().max(500),
-        mobile: z.boolean(),
-      })
-      .parse(input),
-  )
+  .inputValidator((input: z.infer<typeof launchSchema>) => launchSchema.parse(input))
   .handler(async ({ data }) => {
-    const merchantId = process.env["SLOTEGRATOR_MERCHANT_ID"];
-    const merchantKey = process.env["SLOTEGRATOR_MERCHANT_KEY"];
-    const apiUrl = process.env["SLOTEGRATOR_API_URL"];
-    if (!merchantId || !merchantKey || !apiUrl) return { ok: false as const, url: null };
-    const params = {
+    const res = await slotegratorRequest("POST", "/games/init-demo", {
       game_uuid: data.gameUuid,
       device: data.mobile ? "mobile" : "desktop",
       return_url: data.returnUrl,
       language: "en",
-    };
-    const headers: Record<string, string> = {
-      "X-Merchant-Id": merchantId,
-      "X-Timestamp": String(Math.floor(Date.now() / 1000)),
-      "X-Nonce": crypto.randomUUID().replace(/-/g, ""),
-    };
-    headers["X-Sign"] = await hmacSha1Hex(merchantKey, buildSignString({ ...params, ...headers }));
-    try {
-      const res = await fetch(`${apiUrl}/games/init-demo`, {
-        method: "POST",
-        headers: {
-          ...headers,
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams(params).toString(),
-      });
-      if (!res.ok) {
-        console.error("Slotegrator init-demo failed", res.status);
-        return { ok: false as const, url: null };
-      }
-      const body = (await res.json()) as { url?: string };
-      return body.url ? { ok: true as const, url: body.url } : { ok: false as const, url: null };
-    } catch (e) {
-      console.error("Slotegrator init-demo error", e);
+    });
+    const url = (res.body as { url?: string })?.url;
+    if (!res.ok || !url) {
+      console.error("Slotegrator init-demo failed", res.status, res.body);
       return { ok: false as const, url: null };
     }
+    return { ok: true as const, url };
+  });
+
+/** Real-money session for the signed-in player. Balance lives in our database (seamless wallet). */
+export const initReal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof launchSchema>) => launchSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const cfg = slotegratorConfig();
+    if (!cfg) return { ok: false as const, url: null, error: "config" };
+    const { data: profile } = await context.supabase
+      .from("profiles")
+      .select("username, balance")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (!profile) return { ok: false as const, url: null, error: "no_profile" };
+    if (Number(profile.balance) <= 0) return { ok: false as const, url: null, error: "no_balance" };
+    const res = await slotegratorRequest("POST", "/games/init", {
+      game_uuid: data.gameUuid,
+      player_id: context.userId,
+      player_name: profile.username,
+      currency: cfg.currency,
+      session_id: crypto.randomUUID(),
+      device: data.mobile ? "mobile" : "desktop",
+      return_url: data.returnUrl,
+      language: "en",
+    });
+    const url = (res.body as { url?: string })?.url;
+    if (!res.ok || !url) {
+      console.error("Slotegrator init failed", res.status, res.body);
+      return { ok: false as const, url: null, error: `http_${res.status}` };
+    }
+    return { ok: true as const, url, error: null };
+  });
+
+async function assertAdmin(context: {
+  supabase: ReturnType<typeof walletDb>;
+  userId: string;
+}) {
+  const { data } = await context.supabase.rpc("has_role", {
+    _user_id: context.userId,
+    _role: "admin",
+  });
+  if (!data) throw new Error("Forbidden");
+}
+
+/** First-time admin setup: a signed-in user enters the server-side setup code once. */
+export const claimAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { code: string }) =>
+    z.object({ code: z.string().min(1).max(200) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const expected = process.env["ADMIN_SETUP_CODE"];
+    if (!expected || !safeEqual(data.code, expected)) return { ok: false as const };
+    const { error } = await walletDb().rpc("claim_admin", {
+      p_secret: walletSecret(),
+      p_user: context.userId,
+    });
+    if (error) {
+      console.error("claim_admin failed", error);
+      return { ok: false as const };
+    }
+    return { ok: true as const };
+  });
+
+/** Admin-only live checks against the Slotegrator API. */
+export const adminApiCheck = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { check: "games" | "limits" | "self-validate" }) =>
+    z.object({ check: z.enum(["games", "limits", "self-validate"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const cfg = slotegratorConfig();
+    if (!cfg) return { status: 0, ok: false, body: "Slotegrator settings are missing on the server" };
+    const res =
+      data.check === "games"
+        ? await slotegratorRequest("GET", "/games", { page: "1" })
+        : data.check === "limits"
+          ? await slotegratorRequest("GET", "/limits")
+          : await slotegratorRequest("POST", "/self-validate");
+    let body = res.body;
+    if (data.check === "games" && res.ok) {
+      const b = res.body as { items?: unknown[]; _meta?: unknown };
+      body = { games_on_page: b.items?.length ?? 0, meta: b._meta };
+    }
+    return { status: res.status, ok: res.ok, body: JSON.stringify(body, null, 2).slice(0, 4000) };
   });
