@@ -48,10 +48,10 @@ export function parseFormBody(body: string): Record<string, Nested> {
       out[rawKey] = value;
       continue;
     }
-    const path = [m[1], ...Array.from(m[2].matchAll(/\[([^\]]*)\]/g), (x) => x[1])];
+    const path: string[] = [m[1] ?? rawKey, ...Array.from((m[2] ?? "").matchAll(/\[([^\]]*)\]/g), (x) => x[1] ?? "")];
     let node = out as Record<string, Nested>;
     for (let i = 0; i < path.length; i++) {
-      let seg = path[i];
+      let seg = path[i] ?? "";
       const last = i === path.length - 1;
       if (seg === "") seg = String(Object.keys(node).length);
       if (last) node[seg] = value;

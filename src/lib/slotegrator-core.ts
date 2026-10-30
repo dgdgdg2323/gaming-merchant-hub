@@ -45,7 +45,7 @@ export async function slotegratorRequest(
           Accept: "application/json",
           ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
         },
-        body: method === "POST" ? qs : undefined,
+        body: method === "POST" ? qs : null,
       },
     );
     const text = await res.text();
