@@ -14,16 +14,191 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_secrets: {
+        Row: {
+          name: string
+          secret_hash: string
+        }
+        Insert: {
+          name: string
+          secret_hash: string
+        }
+        Update: {
+          name?: string
+          secret_hash?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          username: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id: string
+          username: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallet_transactions: {
+        Row: {
+          action: string
+          amount: number
+          balance_after: number
+          created_at: string
+          game_uuid: string | null
+          id: string
+          note: string | null
+          player_id: string
+          provider_tx_id: string | null
+          ref_tx_id: string | null
+          rolled_back: boolean
+          session_id: string | null
+          tx_type: string | null
+        }
+        Insert: {
+          action: string
+          amount: number
+          balance_after: number
+          created_at?: string
+          game_uuid?: string | null
+          id?: string
+          note?: string | null
+          player_id: string
+          provider_tx_id?: string | null
+          ref_tx_id?: string | null
+          rolled_back?: boolean
+          session_id?: string | null
+          tx_type?: string | null
+        }
+        Update: {
+          action?: string
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          game_uuid?: string | null
+          id?: string
+          note?: string | null
+          player_id?: string
+          provider_tx_id?: string | null
+          ref_tx_id?: string | null
+          rolled_back?: boolean
+          session_id?: string | null
+          tx_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      _wallet_auth: { Args: { p_secret: string }; Returns: undefined }
+      admin_adjust_balance: {
+        Args: { p_amount: number; p_note: string; p_player: string }
+        Returns: number
+      }
+      admin_players: {
+        Args: { p_search: string }
+        Returns: {
+          balance: number
+          created_at: string
+          id: string
+          username: string
+        }[]
+      }
+      admin_recent_transactions: {
+        Args: never
+        Returns: {
+          action: string
+          amount: number
+          balance_after: number
+          created_at: string
+          id: string
+          rolled_back: boolean
+          username: string
+        }[]
+      }
+      admin_stats: { Args: never; Returns: Json }
+      claim_admin: {
+        Args: { p_secret: string; p_user: string }
+        Returns: undefined
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      wallet_balance: {
+        Args: { p_player: string; p_secret: string }
+        Returns: Json
+      }
+      wallet_rollback: {
+        Args: {
+          p_game: string
+          p_items: Json
+          p_player: string
+          p_secret: string
+          p_session: string
+          p_tx: string
+        }
+        Returns: Json
+      }
+      wallet_tx: {
+        Args: {
+          p_action: string
+          p_amount: number
+          p_game: string
+          p_player: string
+          p_ref_tx: string
+          p_secret: string
+          p_session: string
+          p_tx: string
+          p_type: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +325,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
