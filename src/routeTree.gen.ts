@@ -10,33 +10,55 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
+import { Route as ApiPublicSlotegratorCallbackRouteImport } from './routes/api/public/slotegrator/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSlotegratorCallbackRoute =
+  ApiPublicSlotegratorCallbackRouteImport.update({
+    id: '/api/public/slotegrator/callback',
+    path: '/api/public/slotegrator/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/slotegrator/callback': typeof ApiPublicSlotegratorCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/slotegrator/callback': typeof ApiPublicSlotegratorCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/slotegrator/callback': typeof ApiPublicSlotegratorCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/public/health' | '/api/public/slotegrator/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/public/health' | '/api/public/slotegrator/callback'
+  id:
+    '__root__' | '/' | '/api/public/health' | '/api/public/slotegrator/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiPublicSlotegratorCallbackRoute: typeof ApiPublicSlotegratorCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +70,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/slotegrator/callback': {
+      id: '/api/public/slotegrator/callback'
+      path: '/api/public/slotegrator/callback'
+      fullPath: '/api/public/slotegrator/callback'
+      preLoaderRoute: typeof ApiPublicSlotegratorCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiPublicSlotegratorCallbackRoute: ApiPublicSlotegratorCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
