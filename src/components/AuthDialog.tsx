@@ -51,8 +51,14 @@ export function AuthDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 
   async function submit(mode: "login" | "register") {
     const u = username.trim().toLowerCase();
-    if (!USERNAME_RE.test(u)) return toast.error("নাম ৩–২০ অক্ষরের হতে হবে (a-z, 0-9, _)।");
-    if (password.length < 8) return toast.error("পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।");
+    if (!USERNAME_RE.test(u)) {
+      toast.error("নাম ৩–২০ অক্ষরের হতে হবে (a-z, 0-9, _)।");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "register") await register(u, password);

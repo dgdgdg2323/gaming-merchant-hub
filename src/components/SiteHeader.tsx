@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, Shield, Wallet } from "lucide-react";
+import { LogOut, Wallet } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayer, useSession } from "@/hooks/use-player";
@@ -41,13 +41,6 @@ export function SiteHeader({
               <span className="font-semibold">{formatMoney(player?.balance ?? 0, currency)}</span>
             </div>
             <span className="hidden text-sm text-muted-foreground sm:inline">{player?.username}</span>
-            {player?.isAdmin && (
-              <Button asChild variant="outline" size="sm">
-                <Link to="/admin">
-                  <Shield /> অ্যাডমিন
-                </Link>
-              </Button>
-            )}
             <Button variant="ghost" size="icon" aria-label="লগআউট" onClick={() => supabase.auth.signOut()}>
               <LogOut />
             </Button>

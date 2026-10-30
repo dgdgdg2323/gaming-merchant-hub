@@ -57,10 +57,10 @@ export const Route = createFileRoute("/api/public/slotegrator/callback")({
 
         const db = walletDb();
         const secret = walletSecret();
-        const action = String(body.action ?? "");
+        const action = String(body["action"] ?? "");
 
         try {
-          const pid = playerId.safeParse(body.player_id);
+          const pid = playerId.safeParse(body["player_id"]);
           if (!pid.success) return fail("INTERNAL_ERROR", "Player not found");
 
           let result: Record<string, unknown> | null = null;
@@ -96,10 +96,10 @@ export const Route = createFileRoute("/api/public/slotegrator/callback")({
             const p = z
               .object({ transaction_id: txId, game_uuid: opt, session_id: opt })
               .parse(body);
-            const items = toList(body.rollback_transactions).map((t) => ({
-              transaction_id: String(t.transaction_id ?? ""),
-              action: String(t.action ?? ""),
-              amount: String(t.amount ?? "0"),
+            const items = toList(body["rollback_transactions"]).map((t) => ({
+              transaction_id: String(t["transaction_id"] ?? ""),
+              action: String(t["action"] ?? ""),
+              amount: String(t["amount"] ?? "0"),
             }));
             const { data, error } = await db.rpc("wallet_rollback", {
               p_secret: secret,
@@ -115,13 +115,13 @@ export const Route = createFileRoute("/api/public/slotegrator/callback")({
             return fail("INTERNAL_ERROR", "Unknown action");
           }
 
-          if (result?.error === "INSUFFICIENT_FUNDS") {
+          if (result?.["error"] === "INSUFFICIENT_FUNDS") {
             return fail("INSUFFICIENT_FUNDS", "Not enough money to continue playing");
           }
-          if (result?.error) return fail("INTERNAL_ERROR", String(result.error));
-          const out: Record<string, unknown> = { balance: Number(result?.balance ?? 0) };
-          if (result?.transaction_id) out.transaction_id = result.transaction_id;
-          if (result?.rollback_transactions) out.rollback_transactions = result.rollback_transactions;
+          if (result?.["error"]) return fail("INTERNAL_ERROR", String(result.error));
+          const out: Record<string, unknown> = { balance: Number(result?.["balance"] ?? 0) };
+          if (result?.["transaction_id"]) out["transaction_id"] = result["transaction_id"];
+          if (result?.["rollback_transactions"]) out["rollback_transactions"] = result.rollback_transactions;
           return Response.json(out);
         } catch (e) {
           console.error("Slotegrator callback error", action, e);
